@@ -1,0 +1,13 @@
+services:
+  - name: easysame-alert-monitor
+    type: web
+    git:
+      repository: EASySAME/easysame.github.io
+      branch: main
+    docker:
+      dockerfile: Dockerfile
+    ports:
+      - port: 3000
+        protocol: http
+    routes:
+      - path: /
