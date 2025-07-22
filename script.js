@@ -19,7 +19,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const currentAlerts = new Map();
 
-    const ws = new WebSocket(`ws://${window.location.host}`);
+    // The backend server link is now explicitly set here
+    const BACKEND_WS_URL = 'wss://easysame-backend.onrender.com'; 
+
+    const ws = new WebSocket(BACKEND_WS_URL);
 
     ws.onopen = () => {
         console.log('Connected to WebSocket server');
@@ -159,7 +162,6 @@ document.addEventListener('DOMContentLoaded', () => {
         headline.textContent = alert.headline || alert.description.split('\n')[0];
         alertDiv.appendChild(headline);
 
-        // NEW: Mini box for "Issued By"
         const issuerBox = document.createElement('div');
         issuerBox.classList.add('alert-issuer-box');
         issuerBox.innerHTML = `<strong>Issued By:</strong> ${alert.senderName || 'N/A'}`;
@@ -195,59 +197,4 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function handleNewAlert(alert) {
         if (currentAlerts.has(alert.id)) {
-            handleUpdateAlert(alert);
-            return;
-        }
-        noAlertsMessage.style.display = 'none';
-        const alertElement = createAlertElement(alert);
-        alertDisplay.prepend(alertElement);
-        currentAlerts.set(alert.id, alertElement);
-        playSoundForAlertType(alert.event);
-        speakAlert(alert);
-    }
-
-    function handleUpdateAlert(alert) {
-        const existingElement = currentAlerts.get(alert.id);
-        if (existingElement) {
-            existingElement.remove();
-            const updatedElement = createAlertElement(alert);
-            alertDisplay.prepend(updatedElement);
-            currentAlerts.set(alert.id, updatedElement);
-            console.log(`Updated alert: ${alert.event}`);
-            playSoundForAlertType(alert.event);
-            speakAlert(alert);
-        } else {
-            handleNewAlert(alert);
-        }
-    }
-
-    function handleCancelledAlert(alert) {
-        const existingElement = currentAlerts.get(alert.id);
-        if (existingElement) {
-            existingElement.classList.add('cancelled');
-            existingElement.querySelector('h3').textContent += " (CANCELLED)";
-            setTimeout(() => {
-                existingElement.remove();
-                currentAlerts.delete(alert.id);
-                if (currentAlerts.size === 0) {
-                    noAlertsMessage.style.display = 'block';
-                }
-            }, 10000);
-            console.log(`Cancelled alert: ${alert.event}`);
-        }
-    }
-
-    function getSeverityClass(severity) {
-        switch (severity.toLowerCase()) {
-            case 'extreme': return 'severity-extreme';
-            case 'severe': return 'severity-severe';
-            case 'moderate': return 'severity-moderate';
-            case 'minor': return 'severity-minor';
-            default: return 'severity-unknown';
-        }
-    }
-
-    if (currentAlerts.size === 0) {
-        noAlertsMessage.style.display = 'block';
-    }
-});
+            handle
