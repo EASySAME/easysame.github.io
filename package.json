@@ -1,24 +1,23 @@
 {
-  "name": "easysame",
+  "name": "easysame-alert-monitor",
   "version": "1.0.0",
-  "description": "Backend for NOAA SAME Radio with DSP integration using Node.js and multimon-ng.",
+  "description": "NWS Alert Monitor with Text-to-Speech and Location Awareness (IEMBot-like)",
   "main": "backend/server.js",
   "scripts": {
-    "start": "node backend/server.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "start": "node backend/server.js"
   },
   "keywords": [
-    "NOAA",
-    "SAME",
-    "radio",
-    "DSP",
-    "Node.js",
-    "WebSocket",
-    "multimon-ng"
+    "nws",
+    "weather",
+    "alerts",
+    "websocket",
+    "easysame",
+    "node.js"
   ],
-  "author": "GvYoutube/GraisonP",
-  "license": "ISC",
+  "author": "GraisonP",
+  "license": "MIT",
   "dependencies": {
+    "axios": "^1.7.2",
     "express": "^4.19.2",
     "ws": "^8.18.0"
   }
