@@ -19,7 +19,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const currentAlerts = new Map();
 
-    const SERVERLESS_API_URL = 'https://<YOUR_SERVERLESS_FUNCTION_URL>'; // IMPORTANT: CHANGE THIS!
+    const SERVERLESS_API_URL = 'https://easysame-backend.vercel.app/api/get-alerts.js'; // IMPORTANT: CHANGE THIS!
 
     const POLLING_INTERVAL = 60 * 1000;
     let pollingIntervalId;
