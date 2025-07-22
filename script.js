@@ -23,7 +23,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     ws.onopen = () => {
         console.log('Connected to WebSocket server');
-        systemStatus.textContent = 'Connected. Requesting your location...';
+        systemStatus.textContent = 'Waiting for location permission...';
         requestLocation();
     };
 
@@ -66,18 +66,18 @@ document.addEventListener('DOMContentLoaded', () => {
                     const lat = position.coords.latitude;
                     const lon = position.coords.longitude;
                     console.log(`Location obtained: Lat ${lat}, Lon ${lon}`);
-                    systemStatus.textContent = `Location obtained. Monitoring alerts for ${lat.toFixed(4)}, ${lon.toFixed(4)}...`;
+                    systemStatus.textContent = `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
                     ws.send(JSON.stringify({ type: 'setLocation', lat: lat, lon: lon }));
                 },
                 error => {
                     console.error('Geolocation error:', error);
                     let errorMessage = "An unknown error occurred while trying to get your location.";
                     if (error.code === error.PERMISSION_DENIED) {
-                        errorMessage = "Please allow your location permission. As of now, we need to use it. An area search is coming soon, though.";
+                        errorMessage = "Permission Denied! Please allow location access.";
                     } else if (error.code === error.POSITION_UNAVAILABLE) {
-                        errorMessage = "Your location is currently unavailable. Please check your device settings.";
+                        errorMessage = "Location Unavailable. Check device settings.";
                     } else if (error.code === error.TIMEOUT) {
-                        errorMessage = "Location request timed out. Please try again or check your connection.";
+                        errorMessage = "Location request timed out.";
                     }
                     systemStatus.textContent = errorMessage;
                 },
@@ -88,7 +88,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             );
         } else {
-            systemStatus.textContent = "Geolocation is not supported by your browser. This application requires location access.";
+            systemStatus.textContent = "Geolocation not supported by your browser.";
             console.error("Geolocation not supported by this browser.");
         }
     }
@@ -158,6 +158,12 @@ document.addEventListener('DOMContentLoaded', () => {
         headline.classList.add('alert-headline');
         headline.textContent = alert.headline || alert.description.split('\n')[0];
         alertDiv.appendChild(headline);
+
+        // NEW: Mini box for "Issued By"
+        const issuerBox = document.createElement('div');
+        issuerBox.classList.add('alert-issuer-box');
+        issuerBox.innerHTML = `<strong>Issued By:</strong> ${alert.senderName || 'N/A'}`;
+        alertDiv.appendChild(issuerBox);
 
         const descriptionToggle = document.createElement('button');
         descriptionToggle.textContent = 'Show Details';
