@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EASySAME | Online SAME Detection</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="icon" href="images/logo.png" type="image/png">
+</head>
+<body>
+    <header>
+        <img src="images/logo.png" alt="EASySAME Logo" class="header-logo">
+        <h1>EASySAME</h1>
+        <p>Your Local NOAA Radio</p>
+    </header>
+
+    <main>
+        <section class="input-section">
+            <label for="locationInput">Enter Zip Code or Station Callsign:</label>
+            <input type="text" id="locationInput" placeholder="e.g., 12345, KID77">
+            <button id="loadStationButton">Load Station</button>
+            <p id="stationInfo" class="status-message">Station: Not Loaded</p>
+            <button id="startListeningButton" disabled>Start Listening</button>
+            <p id="streamStatus" class="status-message">Stream Status: Not started</p>
+        </section>
+
+        <section class="alerts-section">
+            <h2>Current Alerts</h2>
+            <div id="alertDisplay">
+                <p>Load a station to begin checking for alerts.</p>
+            </div>
+        </section>
+    </main>
+
+    <audio id="liveStreamAudio" preload="auto" crossorigin="anonymous"></audio>
+
+    <audio id="soundAdvisory" src="sounds/snd_advisory.wav" preload="auto"></audio>
+    <audio id="soundWarning" src="sounds/snd_warn.wav" preload="auto"></audio>
+    <audio id="soundTest" src="sounds/snd_testAlert.wav" preload="auto"></audio>
+    <audio id="soundStatement" src="sounds/snd_specialState.wav" preload="auto"></audio>
+
+    <footer>
+        <p>&copy; 2025 GvYoutube/Graison P.</p>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+</html>
