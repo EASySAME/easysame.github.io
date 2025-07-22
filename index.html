@@ -8,11 +8,17 @@
     <link rel="icon" href="images/logo.png" type="image/png">
 </head>
 <body>
-    <div class="container">
-        <h1>Alert Monitor</h1>
-        <p id="systemStatus">Requesting your location permission...</p>
+    <div class="header">
+        <h1>Alerts</h1>
+    </div>
 
-        <div id="alertDisplay">
+    <div class="main-content">
+        <div class="location-info">
+            <p>Your area is:</p>
+            <p id="systemStatus">Requesting your location...</p>
+        </div>
+
+        <div id="alertDisplay" class="alerts-box">
             <p id="noAlertsMessage">No active alerts for your area.</p>
         </div>
     </div>
