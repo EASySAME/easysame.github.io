@@ -1,0 +1,22 @@
+# render.yaml
+# This file defines your Render service configuration.
+# Place this file in the root of your Git repository.
+
+services:
+  - type: web # This defines a web service
+    name: easysame-alert-monitor # The name of your service on Render
+    env: node # Specifies a Node.js environment
+    repo: EASySAME/easysamw.github.io # IMPORTANT: Replace with your actual Git repo path (e.g., github.com/your-username/your-repo-name)
+    branch: main # The branch Render should deploy from (e.g., 'main', 'master')
+    buildCommand: npm install # Command to run during the build process
+    startCommand: npm start # Command to start your application
+    numInstances: 1 # Number of instances to run (start with 1)
+    plan: free # Or 'starter', 'standard', etc. Choose your desired plan.
+    port: 3000 # The port your Node.js server listens on (from backend/server.js)
+    healthCheckPath: / # A path Render will check to confirm your service is running
+    # Optional: Add environment variables if your application needs them
+    # envVars:
+    #   - key: NODE_ENV
+    #     value: production
+    #   - key: NWS_USER_AGENT_EMAIL # You can externalize your User-Agent email here
+    #     value: your-email@example.com
