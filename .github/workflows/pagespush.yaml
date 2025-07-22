@@ -1,0 +1,42 @@
+name: Deploy Frontend to GitHub Pages
+
+on:
+  push:
+    branches:
+      - main # This workflow runs when you push to the 'main' branch
+      # If your main development branch is 'master', change 'main' to 'master'
+
+permissions:
+  contents: read # Allows reading the repository content
+  pages: write   # Allows writing to the GitHub Pages site
+  id-token: write # Required for OIDC authentication to deploy to Pages
+
+concurrency:
+  group: "pages" # Ensures only one Pages deployment runs at a time for this group
+  cancel-in-progress: true # Cancels old runs if a new one is triggered
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages # Specifies the GitHub Pages environment
+      url: ${{ steps.deployment.outputs.page_url }} # Sets the URL for the environment
+    runs-on: ubuntu-latest # Runs the job on the latest Ubuntu runner
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4 # Checks out your repository code
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5 # Configures the GitHub Pages environment
+
+      # No specific build step is needed here because your frontend
+      # consists of pure HTML, CSS, and JavaScript files that are ready to go.
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3 # Uploads your static site as an artifact
+        with:
+          path: './' # Specifies that your static site files are in the root directory of your repo
+
+      - name: Deploy to GitHub Pages
+        id: deployment # Gives this step an ID to reference its outputs
+        uses: actions/deploy-pages@v4 # Deploys the uploaded artifact to GitHub Pages
