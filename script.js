@@ -19,61 +19,27 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const currentAlerts = new Map();
 
-    // The backend server link is now explicitly set here
-    const BACKEND_WS_URL = 'wss://easysame-backend.onrender.com'; 
+    const SERVERLESS_API_URL = 'https://<YOUR_SERVERLESS_FUNCTION_URL>'; // IMPORTANT: CHANGE THIS!
 
-    const ws = new WebSocket(BACKEND_WS_URL);
+    const POLLING_INTERVAL = 60 * 1000;
+    let pollingIntervalId;
+    let userLocation = null;
 
-    ws.onopen = () => {
-        console.log('Connected to WebSocket server');
-        systemStatus.textContent = 'Waiting for location permission...';
-        requestLocation();
-    };
-
-    ws.onmessage = event => {
-        const data = JSON.parse(event.data);
-        console.log('Received from server:', data);
-
-        if (data.type === 'status') {
-            systemStatus.textContent = data.message;
-        } else if (data.type === 'newAlert') {
-            const alert = data.alert;
-            handleNewAlert(alert);
-        } else if (data.type === 'alertUpdate') {
-            const alert = data.alert;
-            handleUpdateAlert(alert);
-        } else if (data.type === 'alertCancelled') {
-            const alert = data.alert;
-            handleCancelledAlert(alert);
-        } else if (data.type === 'noAlerts') {
-            if (currentAlerts.size === 0) {
-                 noAlertsMessage.style.display = 'block';
-            }
-        }
-    };
-
-    ws.onclose = () => {
-        console.log('Disconnected from WebSocket server');
-        systemStatus.textContent = 'Disconnected. Attempting to reconnect...';
-    };
-
-    ws.onerror = error => {
-        console.error('WebSocket error:', error);
-        systemStatus.textContent = 'WebSocket error. Check server.';
-    };
+    systemStatus.textContent = 'Waiting for location permission...';
+    requestLocation();
 
     function requestLocation() {
         if (navigator.geolocation) {
             navigator.geolocation.getCurrentPosition(
                 position => {
-                    const lat = position.coords.latitude;
-                    const lon = position.coords.longitude;
-                    console.log(`Location obtained: Lat ${lat}, Lon ${lon}`);
-                    systemStatus.textContent = `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
-                    ws.send(JSON.stringify({ type: 'setLocation', lat: lat, lon: lon }));
+                    userLocation = {
+                        lat: position.coords.latitude,
+                        lon: position.coords.longitude
+                    };
+                    systemStatus.textContent = `${userLocation.lat.toFixed(4)}, ${userLocation.lon.toFixed(4)}`;
+                    startPollingAlerts();
                 },
                 error => {
-                    console.error('Geolocation error:', error);
                     let errorMessage = "An unknown error occurred while trying to get your location.";
                     if (error.code === error.PERMISSION_DENIED) {
                         errorMessage = "Permission Denied! Please allow location access.";
@@ -92,7 +58,75 @@ document.addEventListener('DOMContentLoaded', () => {
             );
         } else {
             systemStatus.textContent = "Geolocation not supported by your browser.";
-            console.error("Geolocation not supported by this browser.");
+        }
+    }
+
+    function startPollingAlerts() {
+        if (!userLocation) {
+            requestLocation();
+            return;
+        }
+
+        fetchAlerts();
+        pollingIntervalId = setInterval(fetchAlerts, POLLING_INTERVAL);
+        systemStatus.textContent = `Polling for alerts... Last update: ${new Date().toLocaleTimeString()}`;
+    }
+
+    async function fetchAlerts() {
+        if (!userLocation) {
+            requestLocation();
+            return;
+        }
+
+        try {
+            systemStatus.textContent = `Fetching alerts... Last update: ${new Date().toLocaleTimeString()}`;
+            const response = await fetch(`${SERVERLESS_API_URL}?lat=${userLocation.lat}&lon=${userLocation.lon}`);
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(`HTTP error! status: ${response.status}, message: ${errorData.error}`);
+            }
+            const data = await response.json();
+
+            processFetchedAlerts(data.alerts);
+            systemStatus.textContent = `Polling for alerts. Last update: ${new Date().toLocaleTimeString()}`;
+
+        } catch (error) {
+            systemStatus.textContent = `Error fetching alerts. Last attempt: ${new Date().toLocaleTimeString()}`;
+        }
+    }
+
+    function processFetchedAlerts(newAlerts) {
+        const newAlertIds = new Set(newAlerts.map(alert => alert.id));
+        const alertsToAnnounce = [];
+
+        newAlerts.forEach(newAlert => {
+            const existingAlert = currentAlerts.get(newAlert.id);
+
+            if (!existingAlert) {
+                alertsToAnnounce.push(newAlert);
+                handleNewAlert(newAlert);
+            } else {
+                if (existingAlert.headline !== newAlert.headline ||
+                    existingAlert.description !== newAlert.description ||
+                    existingAlert.expires !== newAlert.expires ||
+                    existingAlert.status !== newAlert.status) {
+                    
+                    alertsToAnnounce.push(newAlert);
+                    handleUpdateAlert(newAlert);
+                }
+            }
+        });
+
+        currentAlerts.forEach((alertElement, alertId) => {
+            if (!newAlertIds.has(alertId)) {
+                handleCancelledAlert({ id: alertId, event: alertElement.querySelector('h3').textContent.replace(' (CANCELLED)', '') });
+            }
+        });
+
+        if (alertsToAnnounce.length === 0 && currentAlerts.size === 0) {
+            noAlertsMessage.style.display = 'block';
+        } else {
+            noAlertsMessage.style.display = 'none';
         }
     }
 
@@ -196,5 +230,54 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function handleNewAlert(alert) {
-        if (currentAlerts.has(alert.id)) {
-            handle
+        noAlertsMessage.style.display = 'none';
+        const alertElement = createAlertElement(alert);
+        alertDisplay.prepend(alertElement);
+        currentAlerts.set(alert.id, alertElement);
+        playSoundForAlertType(alert.event);
+        speakAlert(alert);
+    }
+
+    function handleUpdateAlert(alert) {
+        const existingElement = currentAlerts.get(alert.id);
+        if (existingElement) {
+            existingElement.remove();
+            const updatedElement = createAlertElement(alert);
+            alertDisplay.prepend(updatedElement);
+            currentAlerts.set(alert.id, updatedElement);
+            playSoundForAlertType(alert.event);
+            speakAlert(alert);
+        } else {
+            handleNewAlert(alert);
+        }
+    }
+
+    function handleCancelledAlert(alert) {
+        const existingElement = currentAlerts.get(alert.id);
+        if (existingElement) {
+            existingElement.classList.add('cancelled');
+            existingElement.querySelector('h3').textContent += " (CANCELLED)";
+            setTimeout(() => {
+                existingElement.remove();
+                currentAlerts.delete(alert.id);
+                if (currentAlerts.size === 0) {
+                    noAlertsMessage.style.display = 'block';
+                }
+            }, 10000);
+        }
+    }
+
+    function getSeverityClass(severity) {
+        switch (severity.toLowerCase()) {
+            case 'extreme': return 'severity-extreme';
+            case 'severe': return 'severity-severe';
+            case 'moderate': return 'severity-moderate';
+            case 'minor': return 'severity-minor';
+            default: return 'severity-unknown';
+        }
+    }
+
+    if (currentAlerts.size === 0) {
+        noAlertsMessage.style.display = 'block';
+    }
+});
