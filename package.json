@@ -1,0 +1,25 @@
+{
+  "name": "easysame",
+  "version": "1.0.0",
+  "description": "Backend for NOAA SAME Radio with DSP integration using Node.js and multimon-ng.",
+  "main": "backend/server.js",
+  "scripts": {
+    "start": "node backend/server.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "NOAA",
+    "SAME",
+    "radio",
+    "DSP",
+    "Node.js",
+    "WebSocket",
+    "multimon-ng"
+  ],
+  "author": "GvYoutube/GraisonP",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^4.19.2",
+    "ws": "^8.18.0"
+  }
+}
