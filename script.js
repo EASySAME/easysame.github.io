@@ -1,146 +1,247 @@
 document.addEventListener('DOMContentLoaded', () => {
-    const locationInput = document.getElementById('locationInput');
-    const loadStationButton = document.getElementById('loadStationButton');
-    const stationInfo = document.getElementById('stationInfo');
-    const startListeningButton = document.getElementById('startListeningButton');
-    const streamStatus = document.getElementById('streamStatus');
+    const systemStatus = document.getElementById('systemStatus');
     const alertDisplay = document.getElementById('alertDisplay');
-    const liveStreamAudio = document.getElementById('liveStreamAudio');
+    const noAlertsMessage = document.getElementById('noAlertsMessage');
 
-    const soundAdvisory = document.getElementById('soundAdvisory');
-    const soundWarning = document.getElementById('soundWarning');
-    const soundTest = document.getElementById('soundTest');
-    const soundStatement = document.getElementById('soundStatement');
+    const warningAudio = document.getElementById('warningAudio');
+    const advisoryAudio = document.getElementById('advisoryAudio');
+    const testAudio = document.getElementById('testAudio');
+    const statementAudio = document.getElementById('statementAudio');
 
-    let ws;
-    let lastAlertTimestamp = 0;
-    const ALERT_COOLDOWN_MS = 5000;
+    const audioMap = {
+        'warning': warningAudio,
+        'watch': advisoryAudio,
+        'advisory': advisoryAudio,
+        'statement': statementAudio,
+        'test': testAudio,
+        'other': advisoryAudio
+    };
 
-    function playAlertSound(sameCode) {
-        if (!sameCode) return;
+    const currentAlerts = new Map();
 
-        [soundAdvisory, soundWarning, soundTest, soundStatement].forEach(sound => {
-            sound.pause();
-            sound.currentTime = 0;
-        });
+    const ws = new WebSocket(`ws://${window.location.host}`);
 
-        switch (sameCode.toUpperCase()) {
-            case 'A':
-                soundAdvisory.play().catch(e => console.error("Error playing advisory sound:", e));
-                break;
-            case 'W':
-                soundWarning.play().catch(e => console.error("Error playing warning sound:", e));
-                break;
-            case 'T':
-                soundTest.play().catch(e => console.error("Error playing test sound:", e));
-                break;
-            case 'S':
-                soundStatement.play().catch(e => console.error("Error playing statement sound:", e));
-                break;
-            default:
-                console.log(`No specific sound for SAME code: ${sameCode}`);
-                break;
-        }
-    }
+    ws.onopen = () => {
+        console.log('Connected to WebSocket server');
+        systemStatus.textContent = 'Connected. Requesting your location...';
+        requestLocation();
+    };
 
-    function displayAlert(alert) {
-        const alertDiv = document.createElement('div');
-        let typeClass = '';
-        let sameCodeDisplay = '';
+    ws.onmessage = event => {
+        const data = JSON.parse(event.data);
+        console.log('Received from server:', data);
 
-        if (alert.code) {
-            switch (alert.code.toUpperCase()) {
-                case 'A': typeClass = 'advisory'; sameCodeDisplay = 'Advisory (A)'; break;
-                case 'W': typeClass = 'warning'; sameCodeDisplay = 'Warning (W)'; break;
-                case 'T': typeClass = 'test'; sameCodeDisplay = 'Test (T)'; break;
-                case 'S': typeClass = 'statement'; sameCodeDisplay = 'Statement (S)'; break;
-                default: sameCodeDisplay = `Unknown Code (${alert.code})`;
+        if (data.type === 'status') {
+            systemStatus.textContent = data.message;
+        } else if (data.type === 'newAlert') {
+            const alert = data.alert;
+            handleNewAlert(alert);
+        } else if (data.type === 'alertUpdate') {
+            const alert = data.alert;
+            handleUpdateAlert(alert);
+        } else if (data.type === 'alertCancelled') {
+            const alert = data.alert;
+            handleCancelledAlert(alert);
+        } else if (data.type === 'noAlerts') {
+            if (currentAlerts.size === 0) {
+                 noAlertsMessage.style.display = 'block';
             }
-        } else {
-            sameCodeDisplay = 'N/A';
         }
+    };
 
-        alertDiv.className = `alert-item ${typeClass}`;
-        alertDiv.innerHTML = `
-            <h3>${alert.headline} <span style="font-size: 0.8em; color: #666;">(${alert.type || sameCodeDisplay})</span></h3>
-            <p><strong>SAME Code:</strong> ${sameCodeDisplay}</p>
-            <p><strong>Issued:</strong> ${new Date(alert.issued).toLocaleString()}</p>
-            <p>${alert.description}</p>
-        `;
-        alertDisplay.prepend(alertDiv);
+    ws.onclose = () => {
+        console.log('Disconnected from WebSocket server');
+        systemStatus.textContent = 'Disconnected. Attempting to reconnect...';
+    };
+
+    ws.onerror = error => {
+        console.error('WebSocket error:', error);
+        systemStatus.textContent = 'WebSocket error. Check server.';
+    };
+
+    function requestLocation() {
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                position => {
+                    const lat = position.coords.latitude;
+                    const lon = position.coords.longitude;
+                    console.log(`Location obtained: Lat ${lat}, Lon ${lon}`);
+                    systemStatus.textContent = `Location obtained. Monitoring alerts for ${lat.toFixed(4)}, ${lon.toFixed(4)}...`;
+                    ws.send(JSON.stringify({ type: 'setLocation', lat: lat, lon: lon }));
+                },
+                error => {
+                    console.error('Geolocation error:', error);
+                    let errorMessage = "An unknown error occurred while trying to get your location.";
+                    if (error.code === error.PERMISSION_DENIED) {
+                        errorMessage = "Please allow your location permission. As of now, we need to use it. An area search is coming soon, though.";
+                    } else if (error.code === error.POSITION_UNAVAILABLE) {
+                        errorMessage = "Your location is currently unavailable. Please check your device settings.";
+                    } else if (error.code === error.TIMEOUT) {
+                        errorMessage = "Location request timed out. Please try again or check your connection.";
+                    }
+                    systemStatus.textContent = errorMessage;
+                },
+                {
+                    enableHighAccuracy: true,
+                    timeout: 10000,
+                    maximumAge: 60000
+                }
+            );
+        } else {
+            systemStatus.textContent = "Geolocation is not supported by your browser. This application requires location access.";
+            console.error("Geolocation not supported by this browser.");
+        }
     }
 
-    function connectWebSocket() {
-        const KOYEB_BACKEND_URL = `wss://your-koyeb-service-url.koyeb.app`;
+    function playSoundForAlertType(eventType) {
+        let soundToPlay = null;
+        const normalizedEvent = eventType.toUpperCase();
 
-        if (ws && ws.readyState === WebSocket.OPEN) {
-            console.log("WebSocket already connected.");
+        if (normalizedEvent.includes('TORNADO WARNING') || normalizedEvent.includes('SEVERE THUNDERSTORM WARNING') || normalizedEvent.includes('FLASH FLOOD WARNING') || normalizedEvent.includes('HURRICANE WARNING') || normalizedEvent.includes('TSUNAMI WARNING') || normalizedEvent.includes('EXTREME WIND WARNING')) {
+            soundToPlay = audioMap['warning'];
+        }
+        else if (normalizedEvent.includes('TORNADO WATCH') || normalizedEvent.includes('SEVERE THUNDERSTORM WATCH') || normalizedEvent.includes('FLASH FLOOD WATCH') || normalizedEvent.includes('HURRICANE WATCH') || normalizedEvent.includes('TSUNAMI WATCH')) {
+            soundToPlay = audioMap['watch'];
+        }
+        else if (normalizedEvent.includes('TEST') || normalizedEvent.includes('REQUIRED WEEKLY') || normalizedEvent.includes('REQUIRED MONTHLY') || normalizedEvent.includes('EXERCISE')) {
+            soundToPlay = audioMap['test'];
+        }
+        else if (normalizedEvent.includes('ADVISORY') || normalizedEvent.includes('STATEMENT') || normalizedEvent.includes('WINTER STORM WATCH') || normalizedEvent.includes('WINTER STORM WARNING')) {
+            soundToPlay = audioMap['advisory'];
+        }
+        else {
+            soundToPlay = audioMap['other'];
+        }
+
+        if (soundToPlay) {
+            soundToPlay.pause();
+            soundToPlay.currentTime = 0;
+            soundToPlay.play().catch(error => {
+                console.warn("Audio playback prevented, likely by browser autoplay policy:", error);
+            });
+        }
+    }
+
+    function speakAlert(alert) {
+        if ('speechSynthesis' in window) {
+            const eventType = alert.event || 'weather alert';
+            const areaDesc = alert.areaDesc || 'your area';
+            const headline = alert.headline || alert.description.split('\n')[0] || 'no specific details provided.';
+
+            const utteranceText = `Attention. New ${eventType} for ${areaDesc}. The National Weather Service reports: ${headline}.`;
+
+            const utterance = new SpeechSynthesisUtterance(utteranceText);
+            utterance.lang = 'en-US';
+
+            window.speechSynthesis.cancel();
+            window.speechSynthesis.speak(utterance);
+        } else {
+            console.warn('Text-to-Speech not supported in this browser.');
+        }
+    }
+
+    function createAlertElement(alert) {
+        const alertDiv = document.createElement('div');
+        alertDiv.classList.add('alert-item', getSeverityClass(alert.severity));
+        alertDiv.id = `alert-${alert.id}`;
+
+        const header = document.createElement('h3');
+        header.textContent = alert.event;
+        alertDiv.appendChild(header);
+
+        const area = document.createElement('p');
+        area.classList.add('alert-area');
+        area.textContent = `Area: ${alert.areaDesc}`;
+        alertDiv.appendChild(area);
+
+        const headline = document.createElement('p');
+        headline.classList.add('alert-headline');
+        headline.textContent = alert.headline || alert.description.split('\n')[0];
+        alertDiv.appendChild(headline);
+
+        const descriptionToggle = document.createElement('button');
+        descriptionToggle.textContent = 'Show Details';
+        descriptionToggle.classList.add('alert-toggle');
+        alertDiv.appendChild(descriptionToggle);
+
+        const description = document.createElement('p');
+        description.classList.add('alert-description', 'hidden');
+        description.textContent = alert.description;
+        alertDiv.appendChild(description);
+
+        descriptionToggle.onclick = () => {
+            description.classList.toggle('hidden');
+            descriptionToggle.textContent = description.classList.contains('hidden') ? 'Show Details' : 'Hide Details';
+        };
+
+        const issued = document.createElement('p');
+        issued.classList.add('alert-meta');
+        issued.textContent = `Issued: ${new Date(alert.effective).toLocaleString()}`;
+        alertDiv.appendChild(issued);
+
+        const expires = document.createElement('p');
+        expires.classList.add('alert-meta');
+        expires.textContent = `Expires: ${new Date(alert.expires).toLocaleString()}`;
+        alertDiv.appendChild(expires);
+
+        return alertDiv;
+    }
+
+    function handleNewAlert(alert) {
+        if (currentAlerts.has(alert.id)) {
+            handleUpdateAlert(alert);
             return;
         }
-
-        ws = new WebSocket(KOYEB_BACKEND_URL);
-
-        ws.onopen = () => {
-            console.log('Connected to Koyeb backend via WebSocket');
-            streamStatus.textContent = 'Stream Status: Connected. Waiting for alerts...';
-            alertDisplay.innerHTML = '<p>Connected to backend. Waiting for alerts...</p>';
-            startListeningButton.textContent = 'Stop Listening';
-        };
-
-        ws.onmessage = event => {
-            const data = JSON.parse(event.data);
-            console.log('Received message from backend:', data);
-
-            if (data.type === 'sameDetected') {
-                if (Date.now() - lastAlertTimestamp > ALERT_COOLDOWN_MS) {
-                    lastAlertTimestamp = Date.now();
-                    displayAlert(data);
-                    playAlertSound(data.code);
-                }
-            } else if (data.type === 'status') {
-                streamStatus.textContent = `Stream Status: ${data.message}`;
-            }
-        };
-
-        ws.onclose = () => {
-            console.log('Disconnected from Koyeb backend. Attempting to reconnect in 5 seconds...');
-            streamStatus.textContent = 'Stream Status: Disconnected. Reconnecting...';
-            alertDisplay.innerHTML = '<p style="color: red;">Disconnected from backend. Attempting to reconnect...</p>';
-            startListeningButton.textContent = 'Start Listening';
-            startListeningButton.disabled = false;
-            stationInfo.textContent = 'Station: Not Loaded';
-        };
-
-        ws.onerror = error => {
-            console.error('WebSocket error:', error);
-            streamStatus.textContent = 'Stream Status: Connection Error.';
-            alertDisplay.innerHTML = '<p style="color: red;">Backend connection error. Check console.</p>';
-            ws.close();
-        };
+        noAlertsMessage.style.display = 'none';
+        const alertElement = createAlertElement(alert);
+        alertDisplay.prepend(alertElement);
+        currentAlerts.set(alert.id, alertElement);
+        playSoundForAlertType(alert.event);
+        speakAlert(alert);
     }
 
-    loadStationButton.addEventListener('click', () => {
-        const location = locationInput.value.trim();
-        if (location) {
-            stationInfo.textContent = `Station: ${location.toUpperCase()} (Backend stream is currently fixed.)`;
-            startListeningButton.disabled = false;
+    function handleUpdateAlert(alert) {
+        const existingElement = currentAlerts.get(alert.id);
+        if (existingElement) {
+            existingElement.remove();
+            const updatedElement = createAlertElement(alert);
+            alertDisplay.prepend(updatedElement);
+            currentAlerts.set(alert.id, updatedElement);
+            console.log(`Updated alert: ${alert.event}`);
+            playSoundForAlertType(alert.event);
+            speakAlert(alert);
         } else {
-            stationInfo.textContent = 'Station: Please enter a Zip Code or Callsign.';
-            startListeningButton.disabled = true;
+            handleNewAlert(alert);
         }
-    });
+    }
 
-    startListeningButton.addEventListener('click', () => {
-        if (ws && ws.readyState === WebSocket.OPEN) {
-            ws.close();
-        } else {
-            connectWebSocket();
+    function handleCancelledAlert(alert) {
+        const existingElement = currentAlerts.get(alert.id);
+        if (existingElement) {
+            existingElement.classList.add('cancelled');
+            existingElement.querySelector('h3').textContent += " (CANCELLED)";
+            setTimeout(() => {
+                existingElement.remove();
+                currentAlerts.delete(alert.id);
+                if (currentAlerts.size === 0) {
+                    noAlertsMessage.style.display = 'block';
+                }
+            }, 10000);
+            console.log(`Cancelled alert: ${alert.event}`);
         }
-        startListeningButton.disabled = true;
-    });
+    }
 
-    stationInfo.textContent = 'Station: Not Loaded';
-    streamStatus.textContent = 'Stream Status: Not started';
-    startListeningButton.disabled = true;
-    alertDisplay.innerHTML = '<p>Load a station to begin checking for alerts.</p>';
+    function getSeverityClass(severity) {
+        switch (severity.toLowerCase()) {
+            case 'extreme': return 'severity-extreme';
+            case 'severe': return 'severity-severe';
+            case 'moderate': return 'severity-moderate';
+            case 'minor': return 'severity-minor';
+            default: return 'severity-unknown';
+        }
+    }
+
+    if (currentAlerts.size === 0) {
+        noAlertsMessage.style.display = 'block';
+    }
 });
